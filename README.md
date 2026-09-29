@@ -3,7 +3,7 @@
 # Jev Ultrafast ⚡
 
 > [!IMPORTANT]
-> **The Browser Use Cloud waitlist is open.** Get early access to ultrafast browser agents in the cloud.
+> **Browser tasks for a fraction of a cent.** BU Ultrafast on Browser Use Cloud recorded **$0.00214 per URL check** (median; 8/8 correct in a staging test, LLM + stopped browser included). BU Fast adds more reasoning at low token prices. Actual charges vary; network and optional tools are billed separately. [Pricing and test details](https://browser-use.com/pricing#fast-modes).
 > **[Join the waitlist →](https://browser-use.com/ultrafast?utm_source=github&utm_medium=readme&utm_campaign=jev-ultrafast)**
 
 **A browser agent with a dynamic, indexed action space.**
@@ -124,6 +124,15 @@ In six alternating runs with identical models and settings, both versions passed
 The same policy opened the requested Wikipedia article in **2.798 s** and passed a local hotel search/filter task in **1.896 s**. Runs, failures, source hashes, and measurement boundaries are in [performance.md](docs/performance.md).
 
 A `DONE` choice still requires independent outcome verification. The DOM reader handles common HTML and ARIA controls, not the full accessible-name specification. Shadow roots, frames, canvas, uploads, pop-up tabs, nested scrolling, and arbitrary keyboard widgets remain outside this MVP. Owned tabs share the existing Chrome profile.
+
+## BU Ultrafast and BU Fast on Cloud
+
+The Cloud modes use a full reasoning agent and managed browsers. You use one Browser Use API key or the Cloud dashboard, without connecting local Chrome or setting up this demo's two model keys. They are separate agents from the Jev experiment; its 7.1-second video does not measure Cloud performance.
+
+- **BU Ultrafast:** fast, low-cost browser interactions.
+- **BU Fast:** more reasoning for multi-step tasks, with lower token rates than BU Ultrafast.
+
+Both are in early access. Once your project is enabled, pick the mode in Cloud or send `model: "bu-ultrafast"` / `"bu-fast"` to **API v4**. [API examples and mode selection](https://docs.browser-use.com/cloud/agent/models). Billing follows token usage, browser time and optional tools; there is no fixed completion fee. The URL-check result above covers four public sites, two runs each, with browsers explicitly stopped after each task.
 
 ## Development
 

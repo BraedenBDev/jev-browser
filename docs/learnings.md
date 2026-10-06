@@ -168,3 +168,24 @@ solvable CAPTCHA). So it is purely IP-pool + fingerprint (SwiftShader, no GPU on
 detection, not login state. Idealista via this self-hosted browser is a dead end. Paths left:
 context.dev (key already in the vault) or Idealista's official API. The platform itself is good
 for logged-in automation on any site without DataDome-grade protection.
+
+## Control Room spend tracking (context.dev + jev, 2026-10-07)
+
+Wired jev spend and context.dev credit usage into Control Room (the Hermes dashboard at
+127.0.0.1:8780) as two quota windows, so its existing quota-alert logic warns + pages Telegram
+at 90%+ with no new alert code.
+
+- **Ledger:** `jev_ultrafast/spend_log.py` appends to `~/.jev-browser/spend.jsonl`. Hooks:
+  `model.py` choose()/field_text() (jev OpenRouter cost), `classify.py` classify_items (jev cost),
+  `apartment_search.py` scrape_context (context.dev `credits_remaining` from each response's
+  `key_metadata` — the API has no usage endpoint, but every response carries the balance).
+- **Collector:** `vps/spend-collector.py` (self-contained — must NOT import jev_ultrafast, whose
+  __init__ pulls in browser_harness; system python3 runs it) rolls up today's jev $ and the latest
+  context credits, reads `USAGE_INGEST_TOKEN` from the control-room unit's /proc environ, and POSTs
+  two quotas to `/api/usage/ingest/quotas`. `vps/jev-spend-collector.timer` runs it every 15 min.
+- **Limits:** jev $2/day (`JEV_DAILY_BUDGET_USD`), context.dev 7,500 credits/mo
+  (`CONTEXT_MONTHLY_CREDITS`). used_percent drives the alerts.
+- **Control Room edit (NOT in this repo — lives in ~/control-room/current):** added `'context-dev'`
+  and `'jev-spend'` to `QUOTA_SOURCES` and `QUOTA_NAMES` in `lib/usage-overview.js` (backup
+  `.bak-spend`). ingestSnapshots upserts per-id, so it does not clobber the Mac's claude/codex/
+  antigravity quotas. If control-room redeploys from source, re-apply this two-line change there.

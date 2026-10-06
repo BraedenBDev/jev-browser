@@ -150,7 +150,15 @@ def scrape_context(base, max_pages):
         r = client.post(f"{url_base}/web/extract", json=payload, headers={"Authorization": f"Bearer {key}"})
     if r.is_error:
         raise RuntimeError(f"context.dev HTTP {r.status_code}: {r.text[:140]}")
-    listings = ((r.json().get("data") or {}).get("listings")) or []
+    body = r.json()
+    km = body.get("key_metadata") or {}
+    if km.get("credits_remaining") is not None:
+        try:
+            from jev_ultrafast.spend_log import log_spend
+            log_spend("context", credits_remaining=km.get("credits_remaining"), credits_consumed=km.get("credits_consumed"))
+        except Exception:
+            pass
+    listings = ((body.get("data") or {}).get("listings")) or []
     items, seen = [], set()
     for L in listings:
         it = norm(L)

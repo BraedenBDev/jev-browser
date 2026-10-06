@@ -132,6 +132,11 @@ def choose(state, goal, history):
     else:
         choice = controls[operation]["id"] if operation in controls else operation
         probabilities[choice] = operation_answer["probabilities"][operation]
+    try:
+        from .spend_log import log_spend
+        log_spend("jev", usd=(result.get("usage") or {}).get("cost", 0), call="choose")
+    except Exception:
+        pass
     return {
         "choice": choice,
         "operation": operation,
@@ -192,6 +197,11 @@ def field_text(context):
             raise ValueError()
     except (ValueError, KeyError, TypeError):
         raise ValueError("Text helper returned no valid field value; nothing typed.") from None
+    try:
+        from .spend_log import log_spend
+        log_spend("jev", usd=(result.get("usage") or {}).get("cost", 0), call="text")
+    except Exception:
+        pass
     return value, {
         "model": model,
         "latency_ms": round((time.perf_counter() - started) * 1000),

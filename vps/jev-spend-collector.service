@@ -1,0 +1,7 @@
+[Unit]
+Description=Push jev + context.dev spend to Control Room (usage quotas)
+After=control-room.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 %h/jev-browser/vps/spend-collector.py

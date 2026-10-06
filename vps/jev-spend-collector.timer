@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the jev/context.dev spend collector every 15 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

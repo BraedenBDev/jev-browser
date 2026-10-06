@@ -51,7 +51,13 @@ def classify_items(items, fields, question, criteria, workers=8):
     with ThreadPoolExecutor(workers) as pool:
         results = list(pool.map(one, items))
     client.close()
-    return results, round(totals["cost"], 5)
+    cost = round(totals["cost"], 5)
+    try:
+        from jev_ultrafast.spend_log import log_spend
+        log_spend("jev", usd=cost, call="classify", n=len(items))
+    except Exception:
+        pass
+    return results, cost
 
 
 def _main():

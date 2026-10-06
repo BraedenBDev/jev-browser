@@ -151,9 +151,14 @@ class Agent:
                     base64.b64decode(state["page"]["screenshot"])
                 )
             repeated = state["history"][-3:]
+            # Toggling between at most two actions (open dropdown, pick option, reopen...) changes the page
+            # every step but makes no progress.
+            recent = [h for h in state["history"] if h["kind"] != "wait"][-6:]
+            looping = len(recent) == 6 and len({(h["action"], h["kind"], h["text"]) for h in recent}) <= 2
             state["status"] = (
                 "blocked"
-                if len(repeated) == 3 and all(h["page_changed"] is False and h["kind"] != "wait" for h in repeated)
+                if looping
+                or (len(repeated) == 3 and all(h["page_changed"] is False and h["kind"] != "wait" for h in repeated))
                 else "ready"
             )
         else:

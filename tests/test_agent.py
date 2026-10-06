@@ -218,6 +218,16 @@ def test_loading_waits_do_not_trigger_no_progress_stop(runner):
     assert len(runner.state["history"]) == 5 and runner.state["status"] == "ready"
 
 
+def test_oscillating_actions_stop_even_when_the_page_changes(runner):
+    pages = iter({**runner.state["page"], "fingerprint": f"f{i}"} for i in range(20))
+    runner.state["browser"].observe.side_effect = lambda **_: next(pages)
+    for step in range(6):
+        assert runner.state["status"] != "blocked"
+        runner.state["decision"] = decision("e3")
+        runner.command("act", {"fingerprint": runner.state["page"]["fingerprint"]})
+    assert all(h["page_changed"] for h in runner.state["history"]) and runner.state["status"] == "blocked"
+
+
 def test_stale_observation_preserves_executed_action(runner):
     runner.state["decision"] = decision("e3")
     runner.state["browser"].observe.side_effect = StalePage("changed")

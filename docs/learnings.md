@@ -58,3 +58,35 @@ Target: `vps-personal` (openclaw@srv1289614, Ubuntu 24.04, systemd --user with l
 - **Skill:** `apartment-search` (Hermes skill at `skills/hermes/apartment-search/`, copied to `~/.hermes/skills/productivity/apartment-search/SKILL.md`). Built on `apartment_search.py` (URL + extract + `classify_items` + rank). Proven end to end on the Mac against real Idealista; on the VPS it runs, connects, and correctly fails with a bot-challenge message until a residential proxy is wired.
 - **Separation:** only the Python process goes through the broker (for the key). Chromium is a separate service, so its page traffic is independent and is where the residential proxy attaches (`JEV_PROXY` in `vps/chrome.env`).
 - **Open wire-points:** (1) IPRoyal residential proxy (IP-whitelist the VPS, Spain sticky endpoint) into `chrome.env`; (2) confirm Idealista loads through it from the VPS; (3) if challenges persist, fingerprint hardening.
+
+## VPS egress boundary (general-purpose agent, SSRF)
+
+The `browser` skill (jev/bh) is general-purpose by design: it browses wherever a goal or
+page link leads, so it CANNOT be host-allowlisted (that is only right for a site-specific
+extractor like `apartment_search.py`). On a VPS that means a steered or prompt-injected
+agent could try to reach the box's own internals: the agent-vault broker (127.0.0.1:14321),
+Hermes dashboards, the cloud metadata IP (169.254.169.254), RFC1918 hosts.
+
+What is NOT a sufficient control:
+- `--proxy-server` + `--proxy-bypass-list=<-loopback>` (in `chrome.sh`): defence in depth
+  only. **Fail-open** (no proxy -> no protection) and **bypassable** (a proxy is a routing
+  preference; WebRTC/DNS/non-HTTP paths route around it). Do not treat it as the boundary.
+- Per-skill URL allowlists: correct for a single-site extractor, useless for a general agent.
+
+The authoritative control is a **fail-closed network egress firewall scoped to the browser**,
+applied as root. A box-wide drop to private ranges would break Hermes (it needs localhost
+services), so it must be scoped to the Chromium process. Two ways, both a root/infra wire-point:
+
+1. **Reuse agent-vault container isolation (preferred, lazy).** agent-vault's `run
+   --isolation=container` already applies an iptables egress firewall (`--no-firewall` opts
+   out, so it is default-on). Running the browsing stack there reuses a tested boundary
+   instead of hand-rolled nft. Cost: Chromium moves into the container; CDP must be exposed
+   to the host or the agent runs inside too. Architecture change -> confirm with Braeden.
+2. **nftables scoped to the jev-chrome.service cgroup (standalone).** Drop egress from that
+   cgroup to 127.0.0.0/8, 10/8, 172.16/12, 192.168/16, 169.254.0.0/16, ::1, fc00::/7,
+   fe80::/10, allowing only the proxy endpoint + DNS. Match via `socket cgroupv2 level ...`
+   for the unit's v2 cgroup. Version-sensitive; review and test before relying on it. Not
+   written/tested here because this session is non-root.
+
+Until one of these is in place, treat the VPS general agent as able to reach internal
+services, and do not point it at untrusted pages on that box.

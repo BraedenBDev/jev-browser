@@ -9,11 +9,13 @@ CHROME=$(ls -d "$HOME"/.cache/ms-playwright/chromium-*/chrome-linux*/chrome | ta
 PROFILE="$HOME/.jev-browser/chrome-profile"
 mkdir -p "$PROFILE"
 PROXY=""
-# With a proxy set, route ALL traffic through it (<-loopback> removes Chromium's implicit
-# localhost bypass) so a general-purpose browsing agent cannot reach this VPS's own internal
-# services (127.0.0.1, 169.254.169.254, RFC1918) no matter where a page or goal steers it.
-# The residential proxy is on an external network and cannot reach the box's loopback/private
-# ranges, so this is the egress deny that keeps the general skill from doing SSRF internally.
+# DEFENCE IN DEPTH ONLY, not a security boundary. With a proxy set, route all traffic
+# through it (<-loopback> drops Chromium's implicit localhost bypass). This is fail-open
+# (no proxy => no protection) and bypassable (a proxy is a routing preference; WebRTC, DNS
+# and non-HTTP paths can route around it). The AUTHORITATIVE control against a general-purpose
+# agent reaching this VPS's internal services (127.0.0.1 / 169.254.169.254 / RFC1918) is a
+# fail-closed network egress firewall scoped to this service's cgroup, applied as root --
+# see docs/learnings.md ("VPS egress boundary"). Do not treat this flag as that boundary.
 [ -n "${JEV_PROXY:-}" ] && PROXY="--proxy-server=${JEV_PROXY} --proxy-bypass-list=<-loopback>"
 exec "$CHROME" --headless=new --no-sandbox --disable-gpu \
   --remote-debugging-address=127.0.0.1 --remote-debugging-port="${JEV_CDP_PORT:-9333}" \

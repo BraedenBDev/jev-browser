@@ -1,6 +1,6 @@
 ---
 name: apartment-search
-description: Search Idealista for apartments/flats to buy or rent and return a ranked shortlist with judgment filters (real loft/duplex, terrace, etc). Runs the jev-browser stack in headless Chromium on this VPS.
+description: "Search Idealista for apartments with Jev judgment filters. STATUS: BLOCKED from this VPS by DataDome (see note); use context.dev or the Idealista API instead."
 version: 0.1.0
 platforms: [linux]
 related_skills: [flight-shopping, product-price-monitor, portal-watch]
@@ -10,6 +10,15 @@ metadata:
 ---
 
 # apartment-search
+
+> **STATUS (2026-10-06): Idealista HARD-BLOCKS this VPS.** DataDome returns "uso indebido /
+> acceso bloqueado" even with a residential IP, real headful Chrome, a Google login, and a
+> manual human VNC session (confirmed). The extract + Jev-classify + rank LOGIC below is correct
+> and proven against real Idealista from a residential machine — only the VPS fetch is blocked.
+> To run this from the VPS, fetch the listing pages through **context.dev** (anti-bot unblocker,
+> key in Agent Vault) or the **Idealista official API**, then feed the HTML/results to the same
+> `classify.py`. Do NOT keep retrying direct — it only burns proxy IPs. See `jev-browser` skill
+> "Anti-bot reality".
 
 Find apartments on Idealista and hand back a ranked shortlist. Price and location go in the URL (deterministic); everything judgmental (is it a genuine loft, a real terrace, a sensible listing) is decided by Jev over the extracted text; ranking is exact code. Runs in the VPS headless Chromium (`jev-chrome.service`, CDP on 127.0.0.1:9333) and reaches OpenRouter through Agent Vault.
 

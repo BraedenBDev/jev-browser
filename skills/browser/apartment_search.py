@@ -36,9 +36,16 @@ DESC_CAP = 800  # cap untrusted listing text sent to the classifier (injection/c
 
 
 def host_ok(url):
+    """Cheap pre-navigation gate. scrape() additionally checks the browser's own
+    resolved URL, which is authoritative against parser differentials and redirects."""
     from urllib.parse import urlparse
 
-    host = (urlparse(url).hostname or "").lower()
+    if not isinstance(url, str) or any(c in url for c in "\\ \t\n\r"):
+        return False  # browsers normalize backslashes/whitespace; urlparse does not -> reject
+    pr = urlparse(url)
+    if pr.scheme not in ("http", "https"):  # no file:/data:/javascript:/ftp:
+        return False
+    host = (pr.hostname or "").lower().rstrip(".")  # trailing-dot normalized like a browser
     return any(host == s or host.endswith("." + s) for s in ALLOWED_HOST_SUFFIXES)
 
 # One atomic read of the visible result cards.
@@ -95,6 +102,12 @@ def scrape(url, max_pages):
     helpers.wait_for_load()
     items, seen, header = [], set(), ""
     for page in range(max_pages):
+        # Authoritative guard: trust the browser's resolved URL (post-parse, post-redirect),
+        # not the pre-navigation string, so a parser differential or redirect cannot smuggle
+        # us off Idealista before we read or trust the page.
+        landed = (helpers.page_info() or {}).get("url", "")
+        if not host_ok(landed):
+            raise RuntimeError(f"Navigated off Idealista to {landed!r}; aborting.")
         time.sleep(3)  # politeness; heavy crawling re-triggers bot protection
         data = json.loads(helpers.js(EXTRACT_JS))
         if page == 0:
@@ -106,9 +119,10 @@ def scrape(url, max_pages):
                 seen.add(it["href"])
                 items.append(it)
         nxt = data["next"]
-        if not nxt or not host_ok(nxt):  # never follow an off-Idealista pagination link
+        if not nxt or not host_ok(nxt):  # cheap pre-filter; the landed-URL check above is authoritative
             break
         helpers.goto_url(nxt)
+        helpers.wait_for_load()
     return header, items
 
 

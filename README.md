@@ -1,3 +1,15 @@
+# jev-browser
+
+Fork of [browser-use/jev-ultrafast](https://github.com/browser-use/jev-ultrafast) packaged as an all-purpose browser skill for Claude Code, running in your own visible Chrome.
+
+- **[`skills/browser/`](skills/browser/SKILL.md)**: the skill. `bh` (browser-harness in your Chrome), `jev.py` (goal-driven agent with a JSON report), `classify.py` (Jev judgments over extracted items). Install: `ln -s "$PWD/skills/browser" ~/.claude/skills/browser`.
+- **[`docs/learnings.md`](docs/learnings.md)**: what worked and what didn't: Jev via OpenRouter (`~typesafe/jev-latest`), the decision-model vs reader split, Chrome/DataDome setup, open issues.
+- **Agent changes vs upstream**: `TYPESAFE_BASE_URL` (route Jev through OpenRouter), foreground tab, stop on 1-2 action loops.
+
+Upstream README follows.
+
+---
+
 <img src="docs/banner.svg" alt="Jev Ultrafast · Browser Use × TypeSafe" width="100%" />
 
 # Jev Ultrafast ⚡

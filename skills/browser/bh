@@ -1,0 +1,3 @@
+#!/bin/sh
+# browser-harness in the user's real Chrome (CLI lives in the jev-ultrafast venv).
+exec uv run --quiet --project "$HOME/Developer/jev-browser" browser-harness "$@"

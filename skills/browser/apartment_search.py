@@ -28,6 +28,19 @@ from browser_harness.admin import ensure_daemon
 
 OPERATIONS = {"sale": "venta-viviendas", "rent": "alquiler-viviendas"}
 
+# Navigation is locked to Idealista: the initial URL and every pagination link read
+# from the (untrusted) page DOM must stay on these hosts, so a spoofed/compromised page
+# cannot redirect the headless browser at internal or arbitrary targets.
+ALLOWED_HOST_SUFFIXES = ("idealista.com", "idealista.it", "idealista.pt")
+DESC_CAP = 800  # cap untrusted listing text sent to the classifier (injection/cost bound)
+
+
+def host_ok(url):
+    from urllib.parse import urlparse
+
+    host = (urlparse(url).hostname or "").lower()
+    return any(host == s or host.endswith("." + s) for s in ALLOWED_HOST_SUFFIXES)
+
 # One atomic read of the visible result cards.
 EXTRACT_JS = r"""JSON.stringify({
   total: (document.querySelector('h1')||{}).innerText || document.title,
@@ -92,9 +105,10 @@ def scrape(url, max_pages):
             if it["href"] not in seen:
                 seen.add(it["href"])
                 items.append(it)
-        if not data["next"]:
+        nxt = data["next"]
+        if not nxt or not host_ok(nxt):  # never follow an off-Idealista pagination link
             break
-        helpers.goto_url(data["next"])
+        helpers.goto_url(nxt)
     return header, items
 
 
@@ -120,6 +134,8 @@ def main():
         p.error("need --location or --start-url")
 
     url = build_url(args)
+    if not host_ok(url):
+        p.error(f"refusing non-Idealista URL: {url}")
     try:
         header, items = scrape(url, args.pages)
     except Exception as e:
@@ -140,6 +156,8 @@ def main():
     if args.classify_question and args.choice:
         from classify import classify_items
         criteria = dict(c.split("=", 1) for c in args.choice)
+        for it in kept:  # bound untrusted listing text fed to the classifier
+            it["desc"] = (it["desc"] or "")[:DESC_CAP]
         kept, cost = classify_items(kept, ["title", "desc", "details"], args.classify_question, criteria)
         keep_keys = set((args.keep or ",".join(criteria)).split(","))
         uncertain = [it for it in kept if it["jev"].get("choice") in keep_keys and (it["jev"].get("confidence") or 0) < args.min_confidence]

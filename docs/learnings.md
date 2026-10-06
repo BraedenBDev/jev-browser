@@ -107,3 +107,24 @@ Right boundary instead: a fail-closed egress firewall scoped to the Chromium cgr
 that allows ONLY the IPRoyal endpoint (+DNS) and denies all else. Since all browsing must
 exit via IPRoyal anyway, the only reachable destination is IPRoyal (which reaches arbitrary
 sites), so "browse anywhere" works while internal SSRF is impossible. Needs root.
+
+## DataDome on Idealista: residential + headful not enough (2026-10-06)
+
+Built the full anti-block stack on the VPS and it still hard-blocks on Idealista's DataDome:
+- Residential exit via IPRoyal relay: confirmed Barcelona IPs (MasMovil/Orange, postal 08007). WORKS.
+- Headful Chromium under Xvfb (not --headless): webdriver=false, UA spoofed to Win Chrome. WORKS.
+- WebGL: --disable-gpu gave a NULL context (instant bot tell); switched to SwiftShader
+  (--use-angle=swiftshader --enable-unsafe-swiftshader) so a context exists.
+- Result: DataDome interstitial from the FIRST request, no auto-redirect over 27s, every time.
+
+Diagnosis: the block is first-contact, so it is fingerprint/IP-reputation, not IP rotation
+(sticky session would not help). Remaining tells vanilla Chromium can't fix cheaply: SwiftShader
+renderer (not a real GPU), TLS/JA3 of Chrome-for-Testing, canvas/audio fingerprint, and possibly
+the IPRoyal pool being known to DataDome. Beating it needs a stealth stack that spoofs
+canvas/WebGL/TLS (nodriver/patchright/camoufox or commercial anti-detect) or a DataDome-solving
+API (context.dev/ZenRows/Bright Data Web Unlocker) or Idealista's official API. Not an
+incremental-flag fix.
+
+Everything built is reusable and works on sites without DataDome-grade protection: the VPS jev
+stack, the vault-backed residential relay (vps/proxy_relay.py + jev-proxy.service), headful
+Chromium (vps/chrome.sh), and the apartment-search skill. Idealista specifically is the wall.

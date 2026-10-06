@@ -1,7 +1,7 @@
 [Unit]
 Description=Headless Chromium for jev-browser (CDP 127.0.0.1:9333)
-After=network-online.target
-Wants=network-online.target
+After=network-online.target jev-proxy.service
+Wants=network-online.target jev-proxy.service
 
 [Service]
 # chrome.env is optional (the leading - means "do not fail if absent"); it carries

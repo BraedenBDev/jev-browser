@@ -1,0 +1,13 @@
+[Unit]
+Description=jev-browser proxy relay (127.0.0.1 -> IPRoyal residential; creds from vault)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Stdlib-only relay; it shells out to the vault CLI (which has cryptography) for the upstream.
+ExecStart=/usr/bin/python3 %h/jev-browser/vps/proxy_relay.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

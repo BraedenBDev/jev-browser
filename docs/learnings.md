@@ -90,3 +90,20 @@ services), so it must be scoped to the Chromium process. Two ways, both a root/i
 
 Until one of these is in place, treat the VPS general agent as able to reach internal
 services, and do not point it at untrusted pages on that box.
+
+### agent-vault container isolation: tested, does NOT fit browsing (2026-10-06)
+
+Empirically probed `agent-vault run --isolation=container` egress (v0.39.3): default-DENY
+firewall (`-A OUTPUT -o lo ACCEPT`, `conntrack ESTABLISHED ACCEPT`, drop rest) plus a
+transparent MITM proxy that allows only hosts in `scripts/agent-vault/services.yaml`
+(tavily, openrouter, github, context-dev, ...), MITMing each for secret injection. Direct
+egress to everything (example.com, 1.1.1.1, idealista.com, 127.0.0.1, 169.254.*, 10.*) all
+returned 000. So it is an API-egress allowlist broker, not a network sandbox for a browser:
+forcing a browser through it would need every site allowlisted AND the MITM breaks both the
+IPRoyal CONNECT tunnel and the residential exit IP. Verdict: wrong tool for the general
+(and the Idealista) browsing use.
+
+Right boundary instead: a fail-closed egress firewall scoped to the Chromium cgroup/netns
+that allows ONLY the IPRoyal endpoint (+DNS) and denies all else. Since all browsing must
+exit via IPRoyal anyway, the only reachable destination is IPRoyal (which reaches arbitrary
+sites), so "browse anywhere" works while internal SSRF is impossible. Needs root.

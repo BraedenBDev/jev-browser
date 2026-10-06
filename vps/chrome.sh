@@ -1,37 +1,27 @@
 #!/bin/sh
-# Chromium for jev-browser on the VPS. CDP on 127.0.0.1:9333.
+# Real Google Chrome for jev-browser, on the persistent Xvfb display (jev-xvfb.service) so you
+# can VNC in (jev-vnc.service), log into sites and solve challenges once, and the profile keeps
+# the cookies. Automation attaches to the SAME browser over CDP (127.0.0.1:9333).
 #
-# Runs HEADFUL under Xvfb by default: --headless=new is fingerprinted by DataDome/Cloudflare
-# even with a spoofed UA, whereas a real browser on a virtual display is far harder to flag.
-# Set JEV_HEADLESS=1 to force true headless.
-#
-# Page traffic routes through JEV_PROXY when set (the residential relay); --proxy-bypass-list
-# <-loopback> is defence-in-depth only (see vps/chrome.sh history / docs/learnings.md:
-# the authoritative internal-SSRF boundary is a fail-closed cgroup/netns firewall).
+# No --no-sandbox by default: the google-chrome .deb installs a SUID sandbox that works even
+# with unprivileged userns restricted. Set JEV_NO_SANDBOX=1 only if Chrome won't start.
+# WebGL uses SwiftShader (no GPU on the VPS); a manually-solved DataDome cookie is what carries
+# past the fingerprint, which is why the VNC warm-up matters. Page traffic uses JEV_PROXY.
 set -u
-CHROME=$(ls -d "$HOME"/.cache/ms-playwright/chromium-*/chrome-linux*/chrome | tail -1)
+CHROME="$(command -v google-chrome-stable || echo /usr/bin/google-chrome-stable)"
 PROFILE="$HOME/.jev-browser/chrome-profile"
 mkdir -p "$PROFILE"
+export DISPLAY="${JEV_DISPLAY:-:99}"
 PROXY=""
 [ -n "${JEV_PROXY:-}" ] && PROXY="--proxy-server=${JEV_PROXY} --proxy-bypass-list=<-loopback>"
-UA="${JEV_UA:-Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36}"
 
-# --no-sandbox WEAKENS security (a browser RCE is no longer contained) and is only here
-# because this VPS kernel restricts unprivileged user namespaces
-# (kernel.apparmor_restrict_unprivileged_userns=1), which crashes Chromium's normal sandbox.
-# Proper fix (root): re-enable the sandbox via the SUID sandbox or that sysctl, then drop
-# this flag. See docs/learnings.md "VPS Chromium security posture".
-set -- --no-sandbox \
-  --use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader \
+set -- --use-angle=swiftshader --enable-unsafe-swiftshader \
   --disable-blink-features=AutomationControlled \
-  --user-agent="$UA" --lang=es-ES --accept-lang=es-ES,es \
+  --lang=es-ES --accept-lang=es-ES,es \
   --remote-debugging-address=127.0.0.1 --remote-debugging-port="${JEV_CDP_PORT:-9333}" \
   --user-data-dir="$PROFILE" --no-first-run --no-default-browser-check \
-  --disable-background-networking --disable-dev-shm-usage \
-  --window-size=1280,900 $PROXY about:blank
+  --disable-dev-shm-usage --window-size=1280,900
+[ -n "${JEV_UA:-}" ] && set -- "$@" --user-agent="$JEV_UA"
+[ "${JEV_NO_SANDBOX:-0}" = "1" ] && set -- "$@" --no-sandbox
 
-if [ "${JEV_HEADLESS:-0}" = "1" ]; then
-  exec "$CHROME" --headless=new "$@"
-else
-  exec xvfb-run -a --server-args="-screen 0 1280x900x24" "$CHROME" "$@"
-fi
+exec "$CHROME" "$@" $PROXY about:blank

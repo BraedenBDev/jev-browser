@@ -1,0 +1,14 @@
+[Unit]
+Description=jev-browser window manager (openbox on :99)
+After=jev-xvfb.service
+Requires=jev-xvfb.service
+
+[Service]
+Environment=DISPLAY=:99
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 50); do [ -e /tmp/.X11-unix/X99 ] && exit 0; sleep 0.1; done'
+ExecStart=/usr/bin/openbox
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,16 @@
+[Unit]
+Description=jev-browser VNC (x11vnc on :99, localhost only -> reach via SSH tunnel)
+After=jev-xvfb.service
+Requires=jev-xvfb.service
+
+[Service]
+Environment=JEV_VNC_LISTEN=100.127.39.119
+# Bound to the Tailscale IP: reachable only from this tailnet (private, authenticated network),
+# with a VNC password on top. Connect a VNC viewer directly to <tailscale-ip>:5900. JEV_VNC_LISTEN
+# overrides the bind address.
+ExecStart=/usr/bin/x11vnc -display :99 -rfbauth %h/.vnc/passwd -listen ${JEV_VNC_LISTEN} -rfbport 5900 -forever -shared -noxdamage -q
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target

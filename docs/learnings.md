@@ -149,3 +149,22 @@ deny internal. Not done here (non-root session + host-posture change needs appro
 
 Note: if DataDome sites move to a hosted scraper (context.dev), the VPS Chromium is used only
 for non-protected sites, which lowers (not removes) the urgency of this pass.
+
+## Real Chrome + VNC platform + managed profile (2026-10-06)
+
+Replaced the headless/for-testing Chromium with a VNC-able real-browser platform on the VPS:
+- jev-xvfb (Xvfb :99), jev-wm (openbox), jev-vnc (x11vnc on the tailnet IP :5900, VNC pw in the
+  Fernet vault key `vnc-password`), jev-chrome (real google-chrome-stable on :99, persistent
+  profile, CDP 127.0.0.1:9333, proxy via the relay). VNC password + sticky residential still apply.
+- Real Chrome .deb ships a SUID sandbox that works despite the userns restriction, so --no-sandbox
+  is gone (clears that security finding). JEV_NO_SANDBOX=1 only if it won't start.
+- Managed profile: ~/.jev-browser/chrome-profile, warmed with a personal Google login via VNC;
+  marker MANAGED_PROFILE.md; vps/profile-backup.sh snapshots it (cache-excluded, last 5, chmod 600).
+  SENSITIVE: holds personal Google auth on the box.
+
+DataDome FINAL verdict: a real human session (logged into Google, fresh sticky residential IP,
+no automation attached) STILL hard-blocks on Idealista ("uso indebido / acceso bloqueado", no
+solvable CAPTCHA). So it is purely IP-pool + fingerprint (SwiftShader, no GPU on a VPS), not CDP
+detection, not login state. Idealista via this self-hosted browser is a dead end. Paths left:
+context.dev (key already in the vault) or Idealista's official API. The platform itself is good
+for logged-in automation on any site without DataDome-grade protection.

@@ -1,16 +1,15 @@
 [Unit]
-Description=Headless Chromium for jev-browser (CDP 127.0.0.1:9333)
-After=network-online.target jev-proxy.service
-Wants=network-online.target jev-proxy.service
+Description=Google Chrome for jev-browser (persistent display :99, CDP 127.0.0.1:9333)
+After=jev-xvfb.service jev-wm.service jev-proxy.service network-online.target
+Requires=jev-xvfb.service
+Wants=jev-wm.service jev-proxy.service network-online.target
 
 [Service]
-# chrome.env is optional (the leading - means "do not fail if absent"); it carries
-# JEV_PROXY=host:port once a residential proxy is wired.
+# chrome.env carries JEV_PROXY (the residential relay) and optional JEV_NO_SANDBOX / JEV_UA.
 EnvironmentFile=-%h/jev-browser/vps/chrome.env
 ExecStart=%h/jev-browser/vps/chrome.sh
 Restart=always
 RestartSec=3
-# Chromium forks a zygote; keep the whole tree under the unit.
 KillMode=control-group
 
 [Install]

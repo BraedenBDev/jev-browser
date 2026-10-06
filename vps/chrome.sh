@@ -16,6 +16,11 @@ PROXY=""
 [ -n "${JEV_PROXY:-}" ] && PROXY="--proxy-server=${JEV_PROXY} --proxy-bypass-list=<-loopback>"
 UA="${JEV_UA:-Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36}"
 
+# --no-sandbox WEAKENS security (a browser RCE is no longer contained) and is only here
+# because this VPS kernel restricts unprivileged user namespaces
+# (kernel.apparmor_restrict_unprivileged_userns=1), which crashes Chromium's normal sandbox.
+# Proper fix (root): re-enable the sandbox via the SUID sandbox or that sysctl, then drop
+# this flag. See docs/learnings.md "VPS Chromium security posture".
 set -- --no-sandbox \
   --use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader \
   --disable-blink-features=AutomationControlled \

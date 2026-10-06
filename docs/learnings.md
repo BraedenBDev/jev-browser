@@ -128,3 +128,24 @@ incremental-flag fix.
 Everything built is reusable and works on sites without DataDome-grade protection: the VPS jev
 stack, the vault-backed residential relay (vps/proxy_relay.py + jev-proxy.service), headful
 Chromium (vps/chrome.sh), and the apartment-search skill. Idealista specifically is the wall.
+
+## VPS Chromium security posture (open items, root-level)
+
+Two weaknesses in the VPS browser stack, both with the same root-level fix family. Pending
+a user-approved security pass (sudo is available on this box):
+
+1. **`--no-sandbox` (chrome.sh).** Forced by `kernel.apparmor_restrict_unprivileged_userns=1`
+   crashing Chromium's sandbox. A browser RCE on an untrusted page is no longer contained.
+   Fix: re-enable the sandbox (SUID sandbox: chown root + chmod 4755 on the bundled
+   chrome_sandbox + CHROME_DEVEL_SANDBOX; or set that sysctl=0), then drop --no-sandbox.
+2. **Open loopback relay (proxy_relay.py).** 127.0.0.1:13128 is an unauthenticated proxy to
+   the paid residential upstream; any local process can use it. Loopback limits it to local
+   processes.
+
+Both are closed by scoping Chromium (and its access to the relay) with a fail-closed
+nftables-cgroup rule or a dedicated netns, which is also the authoritative egress/SSRF
+boundary. One root-level pass covers: re-enable sandbox, scope egress to IPRoyal + the relay,
+deny internal. Not done here (non-root session + host-posture change needs approval).
+
+Note: if DataDome sites move to a hosted scraper (context.dev), the VPS Chromium is used only
+for non-protected sites, which lowers (not removes) the urgency of this pass.

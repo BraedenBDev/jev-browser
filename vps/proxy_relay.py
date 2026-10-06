@@ -9,6 +9,12 @@ Proxy-Authorization. The upstream URL is read from the browser-automation vault 
 Listen port: JEV_PROXY_PORT (default 13128). Upstream: JEV_PROXY_UPSTREAM, else vault key
 'iproyal-proxy' (format http://user:pass@host:port).
 
+SECURITY: this binds 127.0.0.1 with NO auth, so it is an open proxy to any LOCAL process,
+which can then route through the paid residential proxy as the user's residential IP without
+seeing the credentials. Loopback-only limits this to local processes; the real fix is the
+same fail-closed cgroup/netns scoping pending for the egress boundary (so only the Chromium
+process can reach this port). See docs/learnings.md "VPS Chromium security posture".
+
 Run the self-test with no network:  python3 proxy_relay.py --selftest
 """
 import asyncio

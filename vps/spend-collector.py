@@ -74,6 +74,23 @@ def main():
             "windows": [{"label": "Monthly credits", "used_percent": min(100, used / CONTEXT_MONTHLY_CREDITS * 100),
                          "reset_at": first_next.isoformat(), "window_seconds": 2592000}],
         })
+    # IPRoyal residential: no usage API at this tier, so count bytes through the relay. The
+    # already-burned traffic (before tracking) is seeded as JEV_PROXY_GB_USED_START; set
+    # JEV_PROXY_GB_BUDGET to the real GB your $5 bought (IPRoyal dashboard) for accurate %.
+    try:
+        with open(os.path.expanduser("~/.jev-browser/proxy-bytes")) as f:
+            measured_gb = int(f.read().strip()) / 1e9
+    except Exception:
+        measured_gb = 0.0
+    budget_gb = float(os.environ.get("JEV_PROXY_GB_BUDGET", "0.7"))
+    start_gb = float(os.environ.get("JEV_PROXY_GB_USED_START", "0.35"))
+    used_gb = start_gb + measured_gb
+    quotas.append({
+        "id": "iproyal", "plan": f"$5 residential credit (~{budget_gb:g} GB)",
+        "details": [f"~{used_gb:.3f} of ~{budget_gb:g} GB (~{start_gb:g} GB before tracking + {measured_gb:.3f} GB via relay)"],
+        "windows": [{"label": "Traffic", "used_percent": min(100, used_gb / budget_gb * 100) if budget_gb else 0,
+                     "reset_at": None, "window_seconds": None}],
+    })
     body = json.dumps({"quotas": quotas, "activity": []}).encode()
     req = urllib.request.Request(f"{CONTROL_ROOM}/api/usage/ingest/quotas", data=body,
                                  headers={"Content-Type": "application/json", "x-usage-token": ingest_token()},

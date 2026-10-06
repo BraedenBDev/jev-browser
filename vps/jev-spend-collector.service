@@ -4,4 +4,8 @@ After=control-room.service
 
 [Service]
 Type=oneshot
+# IPRoyal: set these to the real GB your $5 bought (IPRoyal dashboard) and how much was
+# already used before byte-tracking started. Defaults are a PAYG estimate.
+Environment=JEV_PROXY_GB_BUDGET=0.7
+Environment=JEV_PROXY_GB_USED_START=0.35
 ExecStart=/usr/bin/python3 %h/jev-browser/vps/spend-collector.py

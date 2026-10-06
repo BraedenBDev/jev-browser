@@ -189,3 +189,20 @@ at 90%+ with no new alert code.
   and `'jev-spend'` to `QUOTA_SOURCES` and `QUOTA_NAMES` in `lib/usage-overview.js` (backup
   `.bak-spend`). ingestSnapshots upserts per-id, so it does not clobber the Mac's claude/codex/
   antigravity quotas. If control-room redeploys from source, re-apply this two-line change there.
+
+## IPRoyal proxy: off-by-default toggle + usage tracking (2026-10-07)
+
+The residential proxy was always-on (jev-chrome launched with --proxy-server), so ALL VPS Chrome
+traffic — Hermes general browsing AND Chrome's own background networking — burned metered
+residential GB passively, even for sites that don't need it (context.dev now handles DataDome
+separately). Fixes:
+- **Off by default.** `vps/proxy.sh on|off|status` writes/clears JEV_PROXY in chrome.env and
+  restarts Chrome. Default off = direct datacenter IP, zero residential burn. Confirmed Chrome
+  exits the VPS IP when off.
+- **Usage tracking.** IPRoyal's /v1/me API needs identity-verify or $200 spend (not available at
+  $5), so `proxy_relay.py` byte-counts all proxied traffic (both directions = billable) and
+  persists it; `spend-collector.py` reports an `iproyal` quota = JEV_PROXY_GB_USED_START (seed for
+  traffic burned before tracking) + measured GB, vs JEV_PROXY_GB_BUDGET. Set those two env vars
+  (jev-spend-collector.service) to the real GB from the IPRoyal dashboard; defaults are a PAYG
+  estimate (~0.7 GB for $5, half already burned). Limitation: only counts traffic through the
+  relay, not IPRoyal use outside it.

@@ -28,6 +28,10 @@ PORT = int(os.environ.get("JEV_PROXY_PORT", "13128"))
 VAULT = os.path.expanduser("~/.hermes/secrets/vault.py")
 VAULT_PYTHON = os.environ.get("JEV_VAULT_PYTHON", "python3")  # a python with cryptography/Fernet
 VAULT_KEY = "iproyal-proxy"
+# Cumulative bytes proxied (both directions = billable residential traffic). Persisted so the
+# Control Room collector can show usage against the credit; survives relay restarts.
+BYTES_FILE = os.path.expanduser("~/.jev-browser/proxy-bytes")
+_bytes = 0
 
 
 def load_upstream():
@@ -51,14 +55,37 @@ def connect_request(host_port, auth_header):
 
 
 async def pipe(reader, writer):
+    global _bytes
     try:
         while data := await reader.read(65536):
+            _bytes += len(data)
             writer.write(data)
             await writer.drain()
     except (ConnectionError, asyncio.IncompleteReadError):
         pass
     finally:
         writer.close()
+
+
+def _load_bytes():
+    try:
+        with open(BYTES_FILE) as f:
+            return int(f.read().strip())
+    except Exception:
+        return 0
+
+
+async def _persist_bytes():
+    while True:
+        await asyncio.sleep(30)
+        try:
+            os.makedirs(os.path.dirname(BYTES_FILE), exist_ok=True)
+            tmp = BYTES_FILE + ".tmp"
+            with open(tmp, "w") as f:
+                f.write(str(_bytes))
+            os.replace(tmp, BYTES_FILE)
+        except Exception:
+            pass
 
 
 async def handle(client_r, client_w, up_host, up_port, auth_header):
@@ -106,10 +133,13 @@ async def handle(client_r, client_w, up_host, up_port, auth_header):
 
 
 async def main():
+    global _bytes
     up_host, up_port, auth_header = load_upstream()
+    _bytes = _load_bytes()
     server = await asyncio.start_server(
         lambda r, w: handle(r, w, up_host, up_port, auth_header), "127.0.0.1", PORT)
-    print(f"relay on 127.0.0.1:{PORT} -> {up_host}:{up_port}", flush=True)
+    print(f"relay on 127.0.0.1:{PORT} -> {up_host}:{up_port} (resumed {_bytes} bytes)", flush=True)
+    asyncio.create_task(_persist_bytes())
     async with server:
         await server.serve_forever()
 

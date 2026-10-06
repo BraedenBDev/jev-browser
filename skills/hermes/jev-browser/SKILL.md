@@ -34,9 +34,18 @@ This is a **real Chrome, headful on a virtual display (Xvfb :99)** — chosen be
 - **VNC in** to log into more sites or re-auth: viewer → `100.127.39.119:5900` (tailnet only), password in the vault (`python3 ~/.hermes/secrets/vault.py get vnc-password`).
 - **Back up** the warmed profile before risky changes: `~/jev-browser/vps/profile-backup.sh` (cache-excluded, keeps 5, `~/.jev-browser/backups/`, chmod 600). The profile holds personal Google auth — treat as sensitive.
 
-## Residential proxy
+## Residential proxy (OFF by default)
 
-Chrome's page traffic routes through `jev-proxy` (a local relay on 127.0.0.1:13128 → IPRoyal Barcelona residential; creds in vault key `iproyal-proxy`, read at startup, never printed). Currently a **sticky** session (stable exit IP). To rotate the IP, change the `_session-<id>` token in the vault value and `systemctl --user restart jev-proxy`. This is defence-in-depth, not a security boundary (see `~/jev-browser/docs/learnings.md`).
+The residential proxy is **off by default** — Chrome exits via the VPS datacenter IP and burns
+NO residential traffic. It routes through `jev-proxy` (relay 127.0.0.1:13128 → IPRoyal Barcelona;
+creds in vault `iproyal-proxy`, sticky session) only when turned on, which costs metered GB on a
+small credit balance, so leave it off unless a task truly needs a residential IP that context.dev
+cannot cover (DataDome sites already go through context.dev, not this proxy).
+
+- Toggle: `~/jev-browser/vps/proxy.sh on` / `off` / `status` (restarts Chrome; on sets the
+  `--proxy-server` launch flag). Turn it off again as soon as the task is done.
+- Usage is tracked in Control Room (the `IPRoyal proxy` quota) by byte-counting at the relay.
+- Rotate the IP by changing the `_session-<id>` token in the vault value, then restart jev-proxy.
 
 ## Preflight
 

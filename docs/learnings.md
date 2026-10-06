@@ -47,3 +47,14 @@ Evidence, Idealista Sants-Montjuïc (1,113 listings under 500k EUR), "is this a 
 - **Intermittent "Text helper returned no valid field value"** (2 occurrences, not reproducible in 13 retries). `skills/browser/jev.py` now records the raw reply as `text_reply` when it happens.
 - **Shared HTTP/2 `httpx.Client` across threads** fails with `ReadError: [Errno 35]` under parallel load; `classify.py` uses HTTP/1.1.
 - **Click by label, never by position fallback.** A "nearest button" fallback once targeted Google Flights' "Clear Stops" behind a modal.
+
+## VPS deployment (Hermes, 2026-10-06)
+
+Target: `vps-personal` (openclaw@srv1289614, Ubuntu 24.04, systemd --user with lingering on).
+
+- **Headless Chromium** runs as a user service `jev-chrome.service` (`vps/chrome.sh` + `vps/jev-chrome.service`), CDP on 127.0.0.1:9333, `--no-sandbox` (kernel restricts unprivileged userns), auto-restart. browser-harness connects with `BU_CDP_URL=http://127.0.0.1:9333`.
+- **OpenRouter via Agent Vault.** Secrets never sit in plaintext on this box; `agent-vault` is a MITM egress broker. The process holds only the placeholder `__openrouter_api_key__` (safe to write in `.env`); the broker swaps the real key into the header at egress to openrouter.ai (`services.yaml` lists the `openrouter` service). Run jev under `agent-vault run -- finish_env.sh ...` (`vps/run-wrapped.sh`). `finish_env.sh` sets `SSL_CERT_FILE` to a combined CA bundle; OpenSSL honors it, so httpx needs **no** code change (default verify works through the MITM). Proven: `systemone` returns 200 from TypeSafe through the broker.
+- **Session auth:** `agent-vault run` needs a session; Hermes jobs already have `AGENT_VAULT_TOKEN`/`ADDR` in env. `run-wrapped.sh` borrows them from the running `hermes-gateway` unit for standalone runs (never writes them to disk). There's a pre-stubbed `JEV_OPENROUTER_API_KEY` placeholder too, if a Jev-specific key is ever wanted.
+- **Skill:** `apartment-search` (Hermes skill at `skills/hermes/apartment-search/`, copied to `~/.hermes/skills/productivity/apartment-search/SKILL.md`). Built on `apartment_search.py` (URL + extract + `classify_items` + rank). Proven end to end on the Mac against real Idealista; on the VPS it runs, connects, and correctly fails with a bot-challenge message until a residential proxy is wired.
+- **Separation:** only the Python process goes through the broker (for the key). Chromium is a separate service, so its page traffic is independent and is where the residential proxy attaches (`JEV_PROXY` in `vps/chrome.env`).
+- **Open wire-points:** (1) IPRoyal residential proxy (IP-whitelist the VPS, Spain sticky endpoint) into `chrome.env`; (2) confirm Idealista loads through it from the VPS; (3) if challenges persist, fingerprint hardening.

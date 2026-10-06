@@ -154,7 +154,9 @@ def scrape_context(base, max_pages):
     items, seen = [], set()
     for L in listings:
         it = norm(L)
-        if it["href"] and it["href"] not in seen:
+        # host_ok: the url is untrusted (whatever context.dev extracted) -> keep only Idealista
+        # listing links, so a stray/injected URL cannot reach the relayed output.
+        if it["href"] and host_ok(it["href"]) and "/inmueble/" in it["href"] and it["href"] not in seen:
             seen.add(it["href"])
             items.append(it)
     return f"{len(items)} listings via context.dev", items

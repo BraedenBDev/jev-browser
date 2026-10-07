@@ -46,10 +46,16 @@ def ingest_token():
         return tok
     pid = subprocess.run(["systemctl", "--user", "show", "-p", "MainPID", "--value", "control-room.service"],
                          capture_output=True, text=True).stdout.strip()
-    for part in open(f"/proc/{pid}/environ", "rb").read().split(b"\0"):
+    if not pid or pid == "0":
+        raise SystemExit("control-room is not running; cannot read USAGE_INGEST_TOKEN")
+    try:
+        environ = open(f"/proc/{pid}/environ", "rb").read()
+    except OSError:
+        raise SystemExit("control-room is not running; cannot read USAGE_INGEST_TOKEN")
+    for part in environ.split(b"\0"):
         if part.startswith(b"USAGE_INGEST_TOKEN="):
             return part.split(b"=", 1)[1].decode()
-    raise SystemExit("USAGE_INGEST_TOKEN not found (control-room not running?)")
+    raise SystemExit("USAGE_INGEST_TOKEN not found in control-room's environment")
 
 
 def main():

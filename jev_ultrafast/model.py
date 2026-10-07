@@ -181,6 +181,9 @@ def field_text(context):
             "model": model,
             "max_tokens": 1024,
             "response_format": {"type": "json_object"},
+            # OpenRouter only returns usage.cost when asked; without this the text-helper
+            # spend logs as $0 (the /v1/systemone endpoint returns cost natively).
+            **({"usage": {"include": True}} if "openrouter.ai" in base else {}),
             **reasoning,
             "messages": [
                 {"role": "system", "content": TEXT_VALUE},

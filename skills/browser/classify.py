@@ -52,10 +52,13 @@ def classify_items(items, fields, question, criteria, workers=8):
                 time.sleep(0.5 * 2 ** attempt)  # back off before retrying a rate-limited/5xx call
         if r is None or r.is_error:
             return {**item, "jev": {"error": f"HTTP {r.status_code if r else 'connection failed'}"}}, 0.0
-        data = r.json()
-        a = data["answers"]["q"]
-        return {**item, "jev": {k: a[k] for k in ("choice", "confidence", "probabilities")}}, \
-            (data.get("usage", {}).get("cost", 0) or 0)
+        try:  # a 200 with unexpected JSON must not crash the whole batch
+            data = r.json()
+            a = data["answers"]["q"]
+            verdict = {k: a[k] for k in ("choice", "confidence", "probabilities")}
+        except (ValueError, KeyError, TypeError) as e:
+            return {**item, "jev": {"error": f"bad response: {type(e).__name__}"}}, 0.0
+        return {**item, "jev": verdict}, (data.get("usage", {}).get("cost", 0) or 0)
 
     with ThreadPoolExecutor(workers) as pool:
         pairs = list(pool.map(one, items))

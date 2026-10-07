@@ -7,8 +7,13 @@
 set -u
 if [ -z "${AGENT_VAULT_TOKEN:-}" ]; then
     G=$(systemctl --user show -p MainPID --value hermes-gateway.service 2>/dev/null)
-    if [ -n "$G" ] && [ -r "/proc/$G/environ" ]; then
-        eval "$(tr '\0' '\n' < "/proc/$G/environ" | grep -E '^AGENT_VAULT_(TOKEN|ADDR|VAULT)=' | sed 's/^/export /')"
+    if [ -n "$G" ] && [ "$G" != "0" ] && [ -r "/proc/$G/environ" ]; then
+        # Assign directly (no eval): a value with shell metacharacters must not be executed.
+        while IFS='=' read -r k v; do
+            [ -n "$k" ] && export "$k=$v"
+        done <<EOF
+$(tr '\0' '\n' < "/proc/$G/environ" | grep -E '^AGENT_VAULT_(TOKEN|ADDR|VAULT)=')
+EOF
     fi
 fi
 AV="${AV_BIN:-/usr/local/bin/agent-vault}"

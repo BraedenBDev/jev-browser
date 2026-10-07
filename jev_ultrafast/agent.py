@@ -151,10 +151,13 @@ class Agent:
                     base64.b64decode(state["page"]["screenshot"])
                 )
             repeated = state["history"][-3:]
-            # Toggling between at most two actions (open dropdown, pick option, reopen...) changes the page
-            # every step but makes no progress.
+            # Toggling between at most two actions (open dropdown, pick option, reopen...) changes the
+            # page every step but makes no progress. Require the URL to also be stuck on <=2 values, so
+            # genuine repetitive progress (e.g. clicking "Next" through distinct pages) is NOT blocked.
             recent = [h for h in state["history"] if h["kind"] != "wait"][-6:]
-            looping = len(recent) == 6 and len({(h["action"], h["kind"], h["text"]) for h in recent}) <= 2
+            looping = (len(recent) == 6
+                       and len({(h["action"], h["kind"], h["text"]) for h in recent}) <= 2
+                       and len({h.get("url") for h in recent}) <= 2)
             state["status"] = (
                 "blocked"
                 if looping

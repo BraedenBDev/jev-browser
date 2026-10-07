@@ -100,10 +100,6 @@ def build_url(args):
     return f"https://www.idealista.com/{op}/{args.location.strip('/')}/{seg}"
 
 
-def page_url(base, n):
-    return base if n == 1 else base.rstrip("/") + f"/pagina-{n}.html"
-
-
 def price_num(s):
     digits = re.sub(r"[^\d]", "", s or "")
     return int(digits) if digits else None
@@ -242,10 +238,17 @@ def main():
               else f"**Search failed** (via {args.via}). {e}\nURL: {url}")
         sys.exit(1)
 
-    kept = [it for it in items if
-            (args.min_size is None or (it["size_m2"] or 0) >= args.min_size)
-            and (args.max_size is None or (it["size_m2"] or 1e9) <= args.max_size)
-            and (args.min_beds is None or (it["beds"] or 0) >= args.min_beds)]
+    def passes(it):  # an unknown (None) size/beds fails any active filter; a real 0 compares normally
+        s, b = it["size_m2"], it["beds"]
+        if args.min_size is not None and (s is None or s < args.min_size):
+            return False
+        if args.max_size is not None and (s is None or s > args.max_size):
+            return False
+        if args.min_beds is not None and (b is None or b < args.min_beds):
+            return False
+        return True
+
+    kept = [it for it in items if passes(it)]
 
     note, cost = "", 0.0
     if args.classify_question and args.choice:
@@ -254,15 +257,19 @@ def main():
         criteria = dict(c.split("=", 1) for c in args.choice)
         for it in kept:
             it["desc"] = (it["desc"] or "")[:DESC_CAP]
-        kept, cost = classify_items(kept, ["title", "desc", "details"], args.classify_question, criteria)
+        classified, cost = classify_items(kept, ["title", "desc", "details"], args.classify_question, criteria)
         keep_keys = set((args.keep or ",".join(criteria)).split(","))
-        matched = [it for it in kept if it["jev"].get("choice") in keep_keys]
+        matched = [it for it in classified if it["jev"].get("choice") in keep_keys]
         kept = [it for it in matched if (it["jev"].get("confidence") or 0) >= args.min_confidence]
-        uncertain = len(matched) - len(kept)
-        if uncertain:
-            note = f"\n\n_{uncertain} more matched below {args.min_confidence:.0%} confidence (not shown)._"
+        errors = sum(1 for it in classified if "error" in it["jev"])
+        bits = ([f"{len(matched) - len(kept)} more matched below {args.min_confidence:.0%} confidence"]
+                if len(matched) > len(kept) else [])
+        if errors:
+            bits.append(f"{errors} could not be classified")
+        if bits:
+            note = "\n\n_" + "; ".join(bits) + " (not shown)._"
 
-    kept.sort(key=lambda it: it["price_eur"] or 1e12)
+    kept.sort(key=lambda it: it["price_eur"] if it["price_eur"] is not None else 1e12)
     top = kept[: args.limit]
 
     if args.json:
@@ -278,7 +285,8 @@ def main():
     for it in top:
         verdict = f" ({it['jev']['choice']} {it['jev']['confidence']:.0%})" if "jev" in it else ""
         title = it["title"].replace("|", "/")[:60]
-        lines.append(f"| {it['price']} | {title}{verdict} | {it['details'][:45]} | {it['href']} |")
+        details = it["details"].replace("|", "/")[:45]
+        lines.append(f"| {it['price']} | {title}{verdict} | {details} | {it['href']} |")
     tail = f"\n\nRead {len(items)} listings via {args.via}" + (f"; Jev classify ${cost}." if cost else ".")
     print("\n".join(lines) + tail + note)
 

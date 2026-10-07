@@ -42,10 +42,25 @@ creds in vault `iproyal-proxy`, sticky session) only when turned on, which costs
 small credit balance, so leave it off unless a task truly needs a residential IP that context.dev
 cannot cover (DataDome sites already go through context.dev, not this proxy).
 
-- Toggle: `~/jev-browser/vps/proxy.sh on` / `off` / `status` (restarts Chrome; on sets the
-  `--proxy-server` launch flag). Turn it off again as soon as the task is done.
+- Toggle: `~/jev-browser/vps/proxy.sh on "<reason>"` / `off` / `status` (restarts Chrome).
 - Usage is tracked in Control Room (the `IPRoyal proxy` quota) by byte-counting at the relay.
 - Rotate the IP by changing the `_session-<id>` token in the vault value, then restart jev-proxy.
+
+### Turning it ON requires Braeden's explicit authorization
+
+The proxy spends metered residential GB on a small credit balance, so **never turn it on
+autonomously or "to be safe".** Before `proxy.sh on`:
+1. Confirm the task genuinely needs a residential IP that context.dev cannot cover (DataDome
+   sites already go through context.dev, not this proxy — so this is rare).
+2. Explain that to Braeden and **ask for explicit authorization; wait for a clear "yes"** (the
+   two-phase Telegram pattern, like human-in-the-loop-auth). Do not proceed on a maybe.
+3. Only then run `proxy.sh on "<the reason Braeden authorized>"`. The reason is mandatory (no
+   reason = refused), appended to `~/.jev-browser/proxy-toggle.log`, and it posts a Telegram
+   alert so Braeden always sees it go on.
+4. Run `proxy.sh off` the moment the task is done — you may do that without asking, since it
+   saves money. Never leave it on.
+
+Turning the proxy on without Braeden's explicit authorization violates this skill.
 
 ## Preflight
 

@@ -67,57 +67,61 @@ async def pipe(reader, writer):
         writer.close()
 
 
+async def read_headers(reader):
+    """Read header lines up to and including the terminating blank line."""
+    buf = b""
+    while True:
+        line = await reader.readline()
+        buf += line
+        if line in (b"\r\n", b"\n", b""):
+            return buf
+
+
 def _load_bytes():
     try:
         with open(BYTES_FILE) as f:
             return int(f.read().strip())
-    except Exception:
+    except (OSError, ValueError):
         return 0
 
 
 async def _persist_bytes():
+    last = -1
     while True:
         await asyncio.sleep(30)
+        if _bytes == last:  # nothing new since the last write
+            continue
         try:
-            os.makedirs(os.path.dirname(BYTES_FILE), exist_ok=True)
             tmp = BYTES_FILE + ".tmp"
             with open(tmp, "w") as f:
                 f.write(str(_bytes))
             os.replace(tmp, BYTES_FILE)
-        except Exception:
+            last = _bytes
+        except OSError:
             pass
 
 
 async def handle(client_r, client_w, up_host, up_port, auth_header):
     try:
         line = await client_r.readline()
-        if not line:
-            client_w.close(); return
         parts = line.split()
         if len(parts) < 2:
-            client_w.close(); return
+            client_w.close()
+            return
         method, target = parts[0].decode(errors="replace"), parts[1].decode(errors="replace")
-        # drain the client's remaining request headers
-        headers = b""
-        while True:
-            h = await client_r.readline()
-            headers += h
-            if h in (b"\r\n", b"\n", b""):
-                break
+        headers = await read_headers(client_r)  # drain the client's remaining request headers
         up_r, up_w = await asyncio.open_connection(up_host, up_port)
         if method.upper() == "CONNECT":
             up_w.write(connect_request(target, auth_header))
             await up_w.drain()
             status = await up_r.readline()
-            rest = b""
-            while True:
-                h = await up_r.readline()
-                rest += h
-                if h in (b"\r\n", b"\n", b""):
-                    break
+            rest = await read_headers(up_r)
             if b" 200" not in status:
-                client_w.write(status + rest); await client_w.drain()
-                client_w.close(); up_w.close(); return
+                client_w.write(status + rest)
+                await client_w.drain()
+                client_w.close()
+                up_w.close()
+                return
             client_w.write(b"HTTP/1.1 200 Connection established\r\n\r\n")
             await client_w.drain()
         else:
@@ -135,6 +139,10 @@ async def handle(client_r, client_w, up_host, up_port, auth_header):
 async def main():
     global _bytes
     up_host, up_port, auth_header = load_upstream()
+    try:
+        os.makedirs(os.path.dirname(BYTES_FILE), exist_ok=True)
+    except OSError:
+        pass
     _bytes = _load_bytes()
     server = await asyncio.start_server(
         lambda r, w: handle(r, w, up_host, up_port, auth_header), "127.0.0.1", PORT)
@@ -148,9 +156,8 @@ def selftest():
     os.environ["JEV_PROXY_UPSTREAM"] = "http://user:p%40ss@geo.example.com:12321"
     host, port, auth = load_upstream()
     assert (host, port) == ("geo.example.com", 12321), (host, port)
-    # user:p@ss (password percent-decoded by urlparse) base64 == dXNlcjpwQHNz... check decode
-    import base64 as b64
-    decoded = b64.b64decode(auth.split("Basic ")[1].strip()).decode()
+    # password percent-decoded (urlparse does not): p%40ss -> p@ss
+    decoded = base64.b64decode(auth.split("Basic ")[1].strip()).decode()
     assert decoded == "user:p@ss", decoded
     req = connect_request("www.idealista.com:443", auth)
     assert req.startswith(b"CONNECT www.idealista.com:443 HTTP/1.1\r\n")

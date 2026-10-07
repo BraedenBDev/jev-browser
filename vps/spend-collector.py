@@ -87,7 +87,8 @@ def main():
     used_gb = start_gb + measured_gb
     quotas.append({
         "id": "iproyal", "plan": f"$5 residential credit (~{budget_gb:g} GB)",
-        "details": [f"~{used_gb:.3f} of ~{budget_gb:g} GB (~{start_gb:g} GB before tracking + {measured_gb:.3f} GB via relay)"],
+        "details": [f"~{used_gb:.3f} of ~{budget_gb:g} GB "
+                    f"(~{start_gb:g} GB before tracking + {measured_gb:.3f} GB via relay)"],
         "windows": [{"label": "Traffic", "used_percent": min(100, used_gb / budget_gb * 100) if budget_gb else 0,
                      "reset_at": None, "window_seconds": None}],
     })

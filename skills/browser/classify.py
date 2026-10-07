@@ -14,49 +14,55 @@ Each result item gets `jev: {choice, confidence, probabilities}` (or `{error}`).
 
 import json
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 
+try:  # skill -> package import; logging is best-effort, so a missing package is harmless
+    from jev_ultrafast.spend_log import log_spend
+except Exception:
+    def log_spend(*_a, **_k):
+        pass
+
 
 def classify_items(items, fields, question, criteria, workers=8):
-    """Return items with a `jev` verdict added. criteria: {choice_key: description}."""
+    """Return (items with a `jev` verdict added, total cost). criteria: {choice_key: description}."""
     base = os.environ.get("TYPESAFE_BASE_URL", "https://api.typesafe.ai").rstrip("/")
     model = os.environ.get("TYPESAFE_MODEL", "jev-latest")
     key = os.environ["TYPESAFE_API_KEY"]
     client = httpx.Client(timeout=30)  # HTTP/1.1: a shared HTTP/2 connection breaks under threads
-    totals = {"cost": 0.0}
 
     def one(item):
+        """-> (result_item, cost). No shared mutable state, so it is thread-safe."""
         body = {
             "model": model,
             "state": {f: item.get(f) for f in fields},
             "questions": {"q": {"type": "choice", "instructions": question, "criteria": criteria}},
         }
         r = None
-        for _ in range(3):
+        for attempt in range(3):
             try:
                 r = client.post(f"{base}/v1/systemone", json=body, headers={"Authorization": f"Bearer {key}"})
             except httpx.HTTPError:
-                continue
-            if r.status_code not in {429, 502, 503, 529}:
+                r = None
+            if r is not None and r.status_code not in {429, 502, 503, 529}:
                 break
+            if attempt < 2:
+                time.sleep(0.5 * 2 ** attempt)  # back off before retrying a rate-limited/5xx call
         if r is None or r.is_error:
-            return {**item, "jev": {"error": f"HTTP {r.status_code if r else 'connection failed'}"}}
+            return {**item, "jev": {"error": f"HTTP {r.status_code if r else 'connection failed'}"}}, 0.0
         data = r.json()
-        totals["cost"] += data.get("usage", {}).get("cost", 0) or 0
         a = data["answers"]["q"]
-        return {**item, "jev": {k: a[k] for k in ("choice", "confidence", "probabilities")}}
+        return {**item, "jev": {k: a[k] for k in ("choice", "confidence", "probabilities")}}, \
+            (data.get("usage", {}).get("cost", 0) or 0)
 
     with ThreadPoolExecutor(workers) as pool:
-        results = list(pool.map(one, items))
+        pairs = list(pool.map(one, items))
     client.close()
-    cost = round(totals["cost"], 5)
-    try:
-        from jev_ultrafast.spend_log import log_spend
-        log_spend("jev", usd=cost, call="classify", n=len(items))
-    except Exception:
-        pass
+    results = [item for item, _ in pairs]
+    cost = round(sum(c for _, c in pairs), 5)
+    log_spend("jev", usd=cost, call="classify", n=len(items))
     return results, cost
 
 

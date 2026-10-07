@@ -8,8 +8,13 @@ import time
 import httpx
 
 from .questions import NEXT_ACTION, TARGET, TEXT_VALUE
+from .spend_log import log_spend
 
 CLIENT = httpx.Client(http2=True, timeout=25)
+
+
+def _cost(result):
+    return (result.get("usage") or {}).get("cost", 0)
 
 
 def post_json(url, key, body):
@@ -132,11 +137,7 @@ def choose(state, goal, history):
     else:
         choice = controls[operation]["id"] if operation in controls else operation
         probabilities[choice] = operation_answer["probabilities"][operation]
-    try:
-        from .spend_log import log_spend
-        log_spend("jev", usd=(result.get("usage") or {}).get("cost", 0), call="choose")
-    except Exception:
-        pass
+    log_spend("jev", usd=_cost(result), call="choose")
     return {
         "choice": choice,
         "operation": operation,
@@ -197,11 +198,7 @@ def field_text(context):
             raise ValueError()
     except (ValueError, KeyError, TypeError):
         raise ValueError("Text helper returned no valid field value; nothing typed.") from None
-    try:
-        from .spend_log import log_spend
-        log_spend("jev", usd=(result.get("usage") or {}).get("cost", 0), call="text")
-    except Exception:
-        pass
+    log_spend("jev", usd=_cost(result), call="text")
     return value, {
         "model": model,
         "latency_ms": round((time.perf_counter() - started) * 1000),

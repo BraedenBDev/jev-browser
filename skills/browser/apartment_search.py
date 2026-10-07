@@ -24,6 +24,13 @@ import os
 import re
 import sys
 import time
+from urllib.parse import urlparse
+
+try:  # skill -> package import; logging is best-effort
+    from jev_ultrafast.spend_log import log_spend
+except Exception:
+    def log_spend(*_a, **_k):
+        pass
 
 OPERATIONS = {"sale": "venta-viviendas", "rent": "alquiler-viviendas"}
 ALLOWED_HOST_SUFFIXES = ("idealista.com", "idealista.it", "idealista.pt")
@@ -57,7 +64,8 @@ LISTING_SCHEMA = {
 EXTRACT_JS = r"""JSON.stringify({
   total: (document.querySelector('h1')||{}).innerText || document.title,
   blocked: !!document.querySelector('iframe[src*="captcha-delivery"],iframe[src*="recaptcha"]')
-           || (!document.querySelector('article.item') && /captcha|robot|unusual traffic|uso indebido/i.test(document.body.innerText)),
+           || (!document.querySelector('article.item')
+               && /captcha|robot|unusual traffic|uso indebido/i.test(document.body.innerText)),
   next: (document.querySelector('.pagination .next a')||{}).href || null,
   items: [...document.querySelectorAll('article.item')].map(a => ({
     title:   (a.querySelector('.item-link')||{}).innerText || '',
@@ -70,8 +78,6 @@ EXTRACT_JS = r"""JSON.stringify({
 
 
 def host_ok(url):
-    from urllib.parse import urlparse
-
     if not isinstance(url, str) or any(c in url for c in "\\ \t\n\r"):
         return False
     pr = urlparse(url)
@@ -153,11 +159,7 @@ def scrape_context(base, max_pages):
     body = r.json()
     km = body.get("key_metadata") or {}
     if km.get("credits_remaining") is not None:
-        try:
-            from jev_ultrafast.spend_log import log_spend
-            log_spend("context", credits_remaining=km.get("credits_remaining"), credits_consumed=km.get("credits_consumed"))
-        except Exception:
-            pass
+        log_spend("context", credits_remaining=km.get("credits_remaining"), credits_consumed=km.get("credits_consumed"))
     listings = ((body.get("data") or {}).get("listings")) or []
     items, seen = [], set()
     for L in listings:
@@ -195,7 +197,9 @@ def scrape_browser(url, max_pages):
         for it in data["items"]:
             if it["href"] not in seen:
                 seen.add(it["href"])
-                it["price_eur"], it["beds"], it["size_m2"] = price_num(it["price"]), beds_num(it["details"]), size_num(it["details"])
+                it["price_eur"] = price_num(it["price"])
+                it["beds"] = beds_num(it["details"])
+                it["size_m2"] = size_num(it["details"])
                 items.append(it)
         nxt = data["next"]
         if not nxt or not host_ok(nxt):
@@ -252,25 +256,29 @@ def main():
             it["desc"] = (it["desc"] or "")[:DESC_CAP]
         kept, cost = classify_items(kept, ["title", "desc", "details"], args.classify_question, criteria)
         keep_keys = set((args.keep or ",".join(criteria)).split(","))
-        uncertain = [it for it in kept if it["jev"].get("choice") in keep_keys and (it["jev"].get("confidence") or 0) < args.min_confidence]
-        kept = [it for it in kept if it["jev"].get("choice") in keep_keys and (it["jev"].get("confidence") or 0) >= args.min_confidence]
+        matched = [it for it in kept if it["jev"].get("choice") in keep_keys]
+        kept = [it for it in matched if (it["jev"].get("confidence") or 0) >= args.min_confidence]
+        uncertain = len(matched) - len(kept)
         if uncertain:
-            note = f"\n\n_{len(uncertain)} more matched below {args.min_confidence:.0%} confidence (not shown)._"
+            note = f"\n\n_{uncertain} more matched below {args.min_confidence:.0%} confidence (not shown)._"
 
     kept.sort(key=lambda it: it["price_eur"] or 1e12)
     top = kept[: args.limit]
 
     if args.json:
         print(json.dumps({"status": "ok", "via": args.via, "url": url, "header": header, "found": len(items),
-                          "matched": len(kept), "classify_cost_usd": cost, "results": top}, ensure_ascii=False, indent=1))
+                          "matched": len(kept), "classify_cost_usd": cost, "results": top},
+                         ensure_ascii=False, indent=1))
         return
     if not top:
         print(f"No matches. Read {len(items)} listings ({header}).\nURL: {url}{note}")
         return
-    lines = [f"**{len(kept)} matches** (showing {len(top)}), {header}:", "", "| Price | Listing | Details | Link |", "|---|---|---|---|"]
+    lines = [f"**{len(kept)} matches** (showing {len(top)}), {header}:", "",
+             "| Price | Listing | Details | Link |", "|---|---|---|---|"]
     for it in top:
         verdict = f" ({it['jev']['choice']} {it['jev']['confidence']:.0%})" if "jev" in it else ""
-        lines.append(f"| {it['price']} | {it['title'].replace('|', '/')[:60]}{verdict} | {it['details'][:45]} | {it['href']} |")
+        title = it["title"].replace("|", "/")[:60]
+        lines.append(f"| {it['price']} | {title}{verdict} | {it['details'][:45]} | {it['href']} |")
     tail = f"\n\nRead {len(items)} listings via {args.via}" + (f"; Jev classify ${cost}." if cost else ".")
     print("\n".join(lines) + tail + note)
 
